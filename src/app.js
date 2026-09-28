@@ -1,7 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
-
+const {
+  notFoundHandler,
+  errorHandler,
+} = require('./middleware/error.middleware');
 const app = express();
 
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || '*' }));
@@ -15,12 +18,16 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', require('./routes/auth.routes'));
 
-// Further routes will be mounted here as each module is implemented, e.g.:
-// app.use('/api/patrols', require('./routes/patrol.routes'));
+app.use(
+  '/api/conflicts',
+  require('./routes/conflict.routes')
+);
 
-app.use((req, res) => {
-  res.status(404).json({ message: 'Route not found' });
-});
+app.use(notFoundHandler);
+
+app.use(errorHandler);
+
+
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
