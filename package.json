@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node src/utils/seed.js"
+    "seed": "node src/utils/seed.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "test:coverage": "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=src/controllers/conflict.controller.js --test-coverage-include=src/controllers/conflictArchive.controller.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/*.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
