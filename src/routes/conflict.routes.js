@@ -1,4 +1,17 @@
-const express = require('express');
+const express =
+  require('express');
+
+const router =
+  express.Router();
+
+const {
+  protect,
+  authorize,
+} =
+  require('../middleware/auth.middleware');
+
+const upload =
+  require('../middleware/upload.middleware');
 
 const {
   createConflictReport,
@@ -6,66 +19,198 @@ const {
   getAllConflictReports,
   getConflictReportById,
   updateConflictResponse,
-} = require('../controllers/conflict.controller');
+} =
+  require('../controllers/conflict.controller');
 
 const {
-  protect,
-  authorize,
-} = require('../middleware/auth.middleware');
-
-const upload =
-  require('../middleware/upload.middleware');
-
-const router = express.Router();
+  getArchivedConflictReports,
+  getAdminConflictReportById,
+  archiveConflictReport,
+  restoreConflictReport,
+  permanentlyDeleteConflictReport,
+} =
+  require('../controllers/conflictArchive.controller');
 
 /*
- * CREATE REPORT
+ * =====================================================
+ * ALL ROUTES REQUIRE LOGIN
+ * =====================================================
+ */
+router.use(protect);
+
+/*
+ * =====================================================
+ * COMMUNITY MEMBER
+ * =====================================================
+ */
+
+/*
+ * Create conflict report
  *
- * Community Member only.
- * 0 - 5 evidence images.
+ * POST /api/conflicts
  */
 router.post(
   '/',
-  protect,
-  authorize('COMMUNITY_MEMBER'),
-  upload.array('evidence', 5),
+  authorize(
+    'COMMUNITY_MEMBER'
+  ),
+  upload.array(
+    'evidence',
+    5
+  ),
   createConflictReport
 );
 
 /*
- * COMMUNITY MEMBER - MY REPORTS
+ * Community Member own reports
  *
- * Keep this ABOVE /:id.
+ * GET /api/conflicts/my
  */
 router.get(
   '/my',
-  protect,
-  authorize('COMMUNITY_MEMBER'),
+  authorize(
+    'COMMUNITY_MEMBER'
+  ),
   getMyConflictReports
 );
 
 /*
- * STAFF - ALL REPORTS
+ * =====================================================
+ * ADMIN ARCHIVE MANAGEMENT
+ *
+ * IMPORTANT:
+ * Static admin routes must remain
+ * above the generic /:id route.
+ * =====================================================
+ */
+
+/*
+ * Archived conflict reports
+ *
+ * GET /api/conflicts/admin/archived
+ */
+router.get(
+  '/admin/archived',
+  authorize(
+    'ADMIN'
+  ),
+  getArchivedConflictReports
+);
+
+/*
+ * Admin access to active OR archived report
+ *
+ * GET /api/conflicts/admin/:id
+ */
+router.get(
+  '/admin/:id',
+  authorize(
+    'ADMIN'
+  ),
+  getAdminConflictReportById
+);
+
+/*
+ * =====================================================
+ * ADMIN ARCHIVE
+ *
+ * PATCH /api/conflicts/:id/archive
+ * =====================================================
+ */
+router.patch(
+  '/:id/archive',
+  authorize(
+    'ADMIN'
+  ),
+  archiveConflictReport
+);
+
+/*
+ * =====================================================
+ * ADMIN RESTORE
+ *
+ * PATCH /api/conflicts/:id/restore
+ * =====================================================
+ */
+router.patch(
+  '/:id/restore',
+  authorize(
+    'ADMIN'
+  ),
+  restoreConflictReport
+);
+
+/*
+ * =====================================================
+ * ADMIN PERMANENT DELETE
+ *
+ * DELETE /api/conflicts/:id/permanent
+ *
+ * Controller refuses deletion unless
+ * report is already archived.
+ * =====================================================
+ */
+router.delete(
+  '/:id/permanent',
+  authorize(
+    'ADMIN'
+  ),
+  permanentlyDeleteConflictReport
+);
+
+/*
+ * =====================================================
+ * STAFF LIST
+ * =====================================================
+ */
+
+/*
+ * GET /api/conflicts
+ *
+ * Archived reports are automatically
+ * excluded by the ConflictReport model.
  */
 router.get(
   '/',
-  protect,
   authorize(
     'RANGER',
     'COMMUNITY_LIAISON_OFFICER',
     'PARK_MANAGER',
     'RANGER_SUPERVISOR',
+    'RESEARCHER',
     'ADMIN'
   ),
   getAllConflictReports
 );
 
 /*
- * RANGER / CLO RESPONSE
+ * =====================================================
+ * SINGLE REPORT
+ * =====================================================
  */
+
+router.get(
+  '/:id',
+  authorize(
+    'COMMUNITY_MEMBER',
+    'RANGER',
+    'COMMUNITY_LIAISON_OFFICER',
+    'PARK_MANAGER',
+    'RANGER_SUPERVISOR',
+    'RESEARCHER',
+    'ADMIN'
+  ),
+  getConflictReportById
+);
+
+/*
+ * =====================================================
+ * RANGER / CLO RESPONSE
+ * =====================================================
+ */
+
 router.patch(
   '/:id/response',
-  protect,
   authorize(
     'RANGER',
     'COMMUNITY_LIAISON_OFFICER'
@@ -73,21 +218,5 @@ router.patch(
   updateConflictResponse
 );
 
-/*
- * VIEW ONE REPORT
- */
-router.get(
-  '/:id',
-  protect,
-  authorize(
-    'COMMUNITY_MEMBER',
-    'RANGER',
-    'COMMUNITY_LIAISON_OFFICER',
-    'PARK_MANAGER',
-    'RANGER_SUPERVISOR',
-    'ADMIN'
-  ),
-  getConflictReportById
-);
-
-module.exports = router;
+module.exports =
+  router;
