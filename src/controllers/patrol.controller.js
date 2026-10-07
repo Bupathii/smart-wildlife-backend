@@ -99,6 +99,55 @@ function routeHandlers({ routeService }) {
   };
 }
 
+/** Handlers for the Park Manager planning patrols. */
+function planningHandlers({ planningService }) {
+  return {
+    /** POST /api/patrols */
+    async createPatrol(req, res) {
+      res.status(HTTP_CREATED).json(await planningService.createPatrol(req.body ?? {}));
+    },
+
+    /** PUT /api/patrols/:patrolId */
+    async updatePatrol(req, res) {
+      res.json(await planningService.updatePatrol(req.params.patrolId, req.body ?? {}));
+    },
+
+    /** POST /api/patrols/:patrolId/cancel */
+    async cancelPatrol(req, res) {
+      res.json(await planningService.cancelPatrol(req.params.patrolId));
+    },
+  };
+}
+
+/**
+ * Handlers for a ranger using the mobile app. The host application
+ * supplies who is signed in (req.user).
+ */
+function rangerHandlers({ rangerPatrolService }) {
+  return {
+    /** GET /api/patrols/mine */
+    async getMyPatrol(req, res) {
+      res.json(await rangerPatrolService.getMyPatrol(req.user?.email));
+    },
+
+    /** POST /api/patrols/mine/start */
+    async startMyPatrol(req, res) {
+      res.json(await rangerPatrolService.startPatrol(req.user?.email));
+    },
+
+    /** POST /api/patrols/mine/locations */
+    async recordMyLocations(req, res) {
+      const points = req.body?.points;
+      res.json(await rangerPatrolService.recordLocations(req.user?.email, points));
+    },
+
+    /** POST /api/patrols/mine/complete */
+    async completeMyPatrol(req, res) {
+      res.json(await rangerPatrolService.completePatrol(req.user?.email));
+    },
+  };
+}
+
 /**
  * @param {object} services
  * @param {object} services.monitoringService PatrolMonitoringService
@@ -107,6 +156,8 @@ function routeHandlers({ routeService }) {
  * @param {object} services.locationService RangerLocationService
  * @param {object} services.referenceService PatrolReferenceService
  * @param {object} services.routeService PatrolRouteService
+ * @param {object} services.planningService PatrolPlanningService
+ * @param {object} services.rangerPatrolService RangerPatrolService
  * @returns {Object<string, (req: object, res: object) => Promise<void>>}
  */
 function createPatrolController(services) {
@@ -114,6 +165,8 @@ function createPatrolController(services) {
     ...patrolHandlers(services),
     ...referenceHandlers(services),
     ...routeHandlers(services),
+    ...planningHandlers(services),
+    ...rangerHandlers(services),
   };
 }
 

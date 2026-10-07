@@ -186,6 +186,7 @@ class PatrolTimelineBuilder {
           type: 'WAYPOINT',
           label: `Waypoint ${index + 1} reached`,
           timestamp: reached.timestamp,
+          waypointIndex: index,
         });
       }
     });

@@ -42,6 +42,20 @@ const patrolConfig = Object.freeze({
     DESCRIPTION_MAX_LENGTH: 300,
   }),
 
+  PATROL_PLAN: Object.freeze({
+    MAX_RANGERS: 6,
+    MAX_DURATION_HOURS: 24,
+  }),
+
+  /** Positions reported by rangers' phones (mobile app). */
+  DEVICE_TRACKING: Object.freeze({
+    MAX_POINTS_PER_REQUEST: 200,
+    /** A point this recent is live GPS; older ones were stored offline (SYNCHRONIZED). */
+    LIVE_WITHIN_SECONDS: 120,
+    /** Allowance for a phone clock that runs slightly ahead. */
+    FUTURE_TOLERANCE_SECONDS: 300,
+  }),
+
   SIMULATED_GPS: Object.freeze({
     /** Distance a simulated ranger moves along the route per GPS request. */
     STEP_KM: 0.12,

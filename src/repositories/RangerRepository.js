@@ -42,6 +42,12 @@ class RangerRepository extends RangerReader {
     return documents.map(toRanger);
   }
 
+  /** @param {string} userEmail @returns {Promise<object|null>} */
+  async findByUserEmail(userEmail) {
+    const filter = { userEmail: String(userEmail).trim().toLowerCase() };
+    return toRanger(await this.rangerModel.findOne(filter).lean());
+  }
+
   /**
    * @param {string} rangerId
    * @param {{ trackingStatus?: string, lastSyncTime?: Date, lastKnownLocation?: object }} changes

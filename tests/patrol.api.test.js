@@ -174,7 +174,7 @@ test('T-22 GET /api/rangers and /api/rangers/:rangerId/location', async () => {
   const offline = await request(app).get('/api/rangers/RN-003/location').expect(200);
   const missing = await request(app).get('/api/rangers/RN-999/location').expect(404);
 
-  assert.equal(list.body.rangers.length, 6);
+  assert.equal(list.body.rangers.length, 9);
   assert.equal(offline.body.trackingStatus, 'OFFLINE');
   assert.equal(typeof offline.body.location.latitude, 'number');
   assert.equal(offline.body.gpsStatus, 'AVAILABLE');

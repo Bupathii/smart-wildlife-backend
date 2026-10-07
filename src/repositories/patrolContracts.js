@@ -41,6 +41,24 @@ class PatrolReader {
   async findByCriteria() {
     throw notImplemented('PatrolReader', 'findByCriteria');
   }
+
+  /** @returns {Promise<string[]>} the id of every patrol */
+  async findPatrolIds() {
+    throw notImplemented('PatrolReader', 'findPatrolIds');
+  }
+}
+
+/** Creates patrols and changes their plan or status. */
+class PatrolWriter {
+  /** @returns {Promise<void>} */
+  async createPatrol() {
+    throw notImplemented('PatrolWriter', 'createPatrol');
+  }
+
+  /** @returns {Promise<object|null>} the updated patrol */
+  async updatePatrol() {
+    throw notImplemented('PatrolWriter', 'updatePatrol');
+  }
 }
 
 /** Stores the single evaluation of a patrol. */
@@ -56,6 +74,11 @@ class TrackWriter {
   /** @returns {Promise<void>} */
   async appendTrackPoint() {
     throw notImplemented('TrackWriter', 'appendTrackPoint');
+  }
+
+  /** @returns {Promise<void>} */
+  async appendTrackPoints() {
+    throw notImplemented('TrackWriter', 'appendTrackPoints');
   }
 }
 
@@ -74,6 +97,11 @@ class RangerReader {
   /** @returns {Promise<object[]>} */
   async findByRangerIds() {
     throw notImplemented('RangerReader', 'findByRangerIds');
+  }
+
+  /** @returns {Promise<object|null>} the ranger linked to a mobile app account */
+  async findByUserEmail() {
+    throw notImplemented('RangerReader', 'findByUserEmail');
   }
 }
 
@@ -144,6 +172,7 @@ class RouteWriter {
 
 module.exports = {
   PatrolReader,
+  PatrolWriter,
   EvaluationWriter,
   TrackWriter,
   RangerReader,

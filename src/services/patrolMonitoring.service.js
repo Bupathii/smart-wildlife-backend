@@ -16,6 +16,19 @@ const toTime = (value) => new Date(value).getTime();
 const hoursBefore = (date, hours) => new Date(date.getTime() - hours * MILLISECONDS_PER_HOUR);
 const indexBy = (items, key) => new Map(items.map((item) => [item[key], item]));
 
+/**
+ * True when the track already ends with this position: either something
+ * newer is stored, or the very same fix (same time and place) is.
+ */
+function isAlreadyRecorded(lastPoint, point) {
+  if (!lastPoint) return false;
+  const lastTime = toTime(lastPoint.timestamp);
+  const pointTime = toTime(point.timestamp);
+  if (lastTime !== pointTime) return lastTime > pointTime;
+
+  return lastPoint.latitude === point.latitude && lastPoint.longitude === point.longitude;
+}
+
 /** The ranger fields shown on screen, with optional live overrides. */
 function toRangerView(ranger, overrides = {}) {
   return {
@@ -167,6 +180,9 @@ class PatrolTrackRecorder {
     if (!rangerId) return patrol;
 
     const point = LocationPoint.from(freshFixes.get(rangerId)).toJSON();
+    // A position the ranger's phone already stored on the track is not added twice.
+    if (isAlreadyRecorded(patrol.track.at(-1), point)) return patrol;
+
     await this.trackWriter.appendTrackPoint(patrol.patrolId, point);
     return { ...patrol, track: [...patrol.track, point] };
   }

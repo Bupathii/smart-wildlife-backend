@@ -70,6 +70,24 @@ class InMemoryPatrolRepository extends contracts.PatrolReader {
   async appendTrackPoint(patrolId, point) {
     this.patrols.find((item) => item.patrolId === patrolId).track.push(copy(point));
   }
+
+  async appendTrackPoints(patrolId, points) {
+    this.patrols.find((item) => item.patrolId === patrolId).track.push(...copy(points));
+  }
+
+  async findPatrolIds() {
+    return this.patrols.map((item) => item.patrolId);
+  }
+
+  async createPatrol(patrol) {
+    this.patrols.push(copy(patrol));
+  }
+
+  async updatePatrol(patrolId, changes) {
+    const patrol = this.patrols.find((item) => item.patrolId === patrolId);
+    Object.assign(patrol, copy(changes));
+    return copy(patrol);
+  }
 }
 
 class InMemoryRangerRepository extends contracts.RangerReader {
@@ -89,6 +107,11 @@ class InMemoryRangerRepository extends contracts.RangerReader {
 
   async findByRangerIds(rangerIds) {
     return copy(this.rangers.filter((item) => rangerIds.includes(item.rangerId)));
+  }
+
+  async findByUserEmail(userEmail) {
+    const ranger = this.rangers.find((item) => item.userEmail === userEmail);
+    return ranger ? copy(ranger) : null;
   }
 
   async updateTracking(rangerId, changes) {
