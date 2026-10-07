@@ -9,7 +9,12 @@
     "dev": "nodemon src/server.js",
     "seed": "node src/utils/seed.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
-    "test:coverage": "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=src/controllers/conflict.controller.js --test-coverage-include=src/controllers/conflictArchive.controller.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/*.test.js"
+    "test:coverage": "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=src/controllers/conflict.controller.js --test-coverage-include=src/controllers/conflictArchive.controller.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/*.test.js",
+    "seed:patrols": "node src/utils/patrolSeed.js",
+    "test:patrol": "node --test --test-concurrency=1 --test-reporter=spec tests/patrol.*.test.js",
+    "test:coverage:patrol": "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=src/patrol.container.js --test-coverage-include=src/config/patrol.config.js --test-coverage-include=src/constants/patrolEnums.js --test-coverage-include=src/controllers/patrol.controller.js --test-coverage-include=src/errors/** --test-coverage-include=src/gps/** --test-coverage-include=src/middleware/patrolError.middleware.js --test-coverage-include=src/models/patrolDomain.js --test-coverage-include=src/repositories/** --test-coverage-include=src/routes/patrol.routes.js --test-coverage-include=src/services/patrol*.js --test-coverage-include=src/strategies/** --test-coverage-include=src/utils/geo.js --test-coverage-include=src/utils/logger.js --test-coverage-include=src/utils/patrolSeed.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/patrol.*.test.js",
+    "lint:patrol": "eslint",
+    "format:patrol": "prettier --write --single-quote --print-width 100 \"src/patrol.container.js\" \"src/**/patrol*.js\" \"src/{errors,gps,repositories,strategies}/**/*.js\" \"src/models/{Park,Patrol,Ranger,locationPoint.schema}.js\" \"src/utils/{geo,logger}.js\" \"tests/patrol.*.js\""
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -24,6 +29,10 @@
     "nodemailer": "^6.9.14"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
+    "nodemon": "^3.1.4",
+    "prettier": "^3.9.9",
+    "supertest": "^7.3.1"
   }
 }
