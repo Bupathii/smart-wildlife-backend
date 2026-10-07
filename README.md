@@ -70,7 +70,7 @@ All routes require `protect` (valid JWT). Role gating via `authorize(...roles)`:
 Notable model behavior (`src/models/ConflictReport.js`): archived reports are excluded from all `find`/`findOne`/`findById` queries by a `pre('find')` hook unless the query opts in with `.withArchived()`. `clientReportId` is a unique/sparse field used by the mobile app's offline sync to avoid duplicate submissions.
 
 ### Patrol monitoring (`/api/patrols`, `/api/parks`, `/api/rangers`, `src/routes/patrol.routes.js`)
-Use case: **Monitor and Evaluate Ranger Patrol Activities**. Viewable by `PARK_MANAGER`, `ADMIN`, `RANGER_SUPERVISOR`; evaluations can be saved and routes changed by `PARK_MANAGER` and `ADMIN`. Errors use the shape `{ error: { code, message, fields? } }`.
+Use case: **Monitor and Evaluate Ranger Patrol Activities**. Viewable by `PARK_MANAGER`, `ADMIN`, `RANGER_SUPERVISOR`; evaluations can be saved, routes changed and patrols planned by `PARK_MANAGER` and `ADMIN`. The `/api/patrols/mine` endpoints are for `RANGER` accounts linked to a ranger profile. Errors use the shape `{ error: { code, message, fields? } }`.
 
 | Method & path | Purpose |
 |---|---|
@@ -81,6 +81,13 @@ Use case: **Monitor and Evaluate Ranger Patrol Activities**. Viewable by `PARK_M
 | `GET /api/patrols/:patrolId/coverage` | Coverage of one patrol by zone |
 | `PUT /api/patrols/:patrolId/evaluation` | Record or update the evaluation `{ rating, notes }` — completed patrols only |
 | `GET /api/parks/:parkId/zones` | Zones and routes for the map (sample park id: `PK-YALA`) |
+| `POST /api/patrols` | Park Manager assigns rangers to a route `{ routeId, rangerIds, startTime, endTime }` → a PLANNED patrol (201) |
+| `PUT /api/patrols/:patrolId` | Change a planned patrol (409 once it has started) |
+| `POST /api/patrols/:patrolId/cancel` | Cancel a planned patrol |
+| `GET /api/patrols/mine` | **Ranger (mobile app):** assigned patrol, waypoint checklist, insights, recent history |
+| `POST /api/patrols/mine/start` | Ranger starts the patrol (PLANNED → ACTIVE) |
+| `POST /api/patrols/mine/locations` | Phone reports positions `{ points: [{ latitude, longitude, timestamp }] }`; late points are stored as SYNCHRONIZED |
+| `POST /api/patrols/mine/complete` | Ranger ends the patrol (→ COMPLETED) |
 | `GET /api/parks/:parkId/routes` | Patrol routes with how many patrols use each |
 | `POST /api/parks/:parkId/routes` | Create a route `{ name, description, waypoints }` — length, zones and id are worked out (201) |
 | `PUT /api/parks/:parkId/routes/:routeId` | Edit a route — waypoints are locked (409) while a patrol is on it |
@@ -88,9 +95,11 @@ Use case: **Monitor and Evaluate Ranger Patrol Activities**. Viewable by `PARK_M
 | `GET /api/rangers` | Rangers for the filter dropdown |
 | `GET /api/rangers/:rangerId/location` | Re-query the GPS service for one ranger (Retry button) |
 
-The GPS Tracking Service is **simulated** (`src/gps/`): each request moves a ranger a little further along the route. Flags: `GPS_DOWN=true` (service unavailable), `GPS_OFFLINE_RANGERS=RN-003,RN-005` (who has no signal; default `RN-003`).
+The GPS Tracking Service (`src/gps/`) locates a ranger who uses the mobile app from the last position their phone reported (`DeviceFirstGpsTrackingService`); every other ranger is **simulated**: each request moves them a little further along the route. Flags: `GPS_DOWN=true` (service unavailable), `GPS_OFFLINE_RANGERS=RN-003,RN-005` (who has no signal; default `RN-003`).
 
-Sample data: `npm run seed:patrols` (Yala National Park: 4 zones, 4 routes, 6 rangers, 8 patrols). It replaces only the `parks`, `rangers` and `patrols` documents for `PK-YALA`. `SEED_NO_ACTIVE=true` seeds without active patrols. Thresholds (40 % coverage, 48 h, 24 h, 15 min offline, 200 m, 30 s refresh) are in `src/config/patrol.config.js`.
+Sample data: `npm run seed:patrols` (Yala National Park: 4 zones, 4 routes, 6 rangers, 8 patrols). It replaces only the `parks`, `rangers` and `patrols` documents for `PK-YALA`. `SEED_NO_ACTIVE=true` seeds without active patrols. Ranger app logins (password `Ranger@123`): `ranger.demo@wildlife.lk` (Dilan Fernando), `ranger2.demo@wildlife.lk`, `ranger3.demo@wildlife.lk`. `npm run seed:app-rangers` adds these three rangers and any missing login **without** resetting routes or patrols; the full `seed:patrols` also creates them. Existing user accounts are never modified.
+
+Thresholds (40 % coverage, 48 h, 24 h, 15 min offline, 200 m, 30 s refresh) are in `src/config/patrol.config.js`.
 
 Design notes — SOLID, patterns, code smells, flow-to-test traceability, demo steps: see [VIVA_NOTES_PATROL_MONITORING.md](VIVA_NOTES_PATROL_MONITORING.md).
 
@@ -102,12 +111,12 @@ src/
   constants/     # roles.js — single source of truth for role names; patrolEnums
   controllers/   # auth, conflict, conflictArchive, patrol
   errors/        # patrolErrors (NotFoundError, ValidationError, GpsServiceUnavailableError)
-  gps/           # GpsTrackingService (abstract), simulator and its adapter
+  gps/           # GpsTrackingService (abstract), simulator and its adapter, phone-first adapter
   middleware/    # auth (protect/authorize), upload (multer), error handling, patrolError
   models/        # User, ConflictReport, Park, Ranger, Patrol, patrolDomain (LocationPoint, Zone, …)
   repositories/  # patrolContracts (small interfaces) + MongoDB repositories for patrols, rangers, parks
   routes/        # auth.routes, conflict.routes, patrol.routes
-  services/      # patrolCalculators, patrolMonitoring, patrolQuery, patrolEvaluation, patrolRoute
+  services/      # patrolCalculators, patrolMonitoring, patrolQuery, patrolEvaluation, patrolRoute, patrolAssignment
   strategies/    # coverage strategies (zone proximity, time weighted)
   utils/         # email (nodemailer), cloudinaryUpload, seed, patrolSeed, geo, logger
   app.js         # Express app setup (middleware, route mounting)
@@ -128,4 +137,4 @@ npm run lint:patrol           # ESLint for the patrol monitoring files only
 ## Status / known gaps
 
 - Rangers-management, incidents, alerts, camera-traps and settings pages referenced by the frontend's routing/nav are **not yet implemented** on this API in this branch.
-- Fully implemented end-to-end (model, controller, routes, tests): conflict reports (community → ranger/CLO workflow, including archive/restore) patrol monitoring (Park Manager dashboard, filter, history, details, evaluation) and patrol route management (create, edit, delete).
+- Fully implemented end-to-end (model, controller, routes, tests): conflict reports (community → ranger/CLO workflow, including archive/restore) patrol monitoring (Park Manager dashboard, filter, history, details, evaluation), patrol route management (create, edit, delete) and patrol assignment with phone tracking (plan on the web, carry out in the mobile app).

@@ -228,11 +228,12 @@ class PatrolReferenceService {
   /** @returns {Promise<Array<{ rangerId: string, name: string, rank: string }>>} */
   async listRangers() {
     const rangers = await this.rangerReader.findAll();
-    return rangers.map(({ rangerId, name, rank, trackingStatus }) => ({
+    return rangers.map(({ rangerId, name, rank, trackingStatus, userEmail }) => ({
       rangerId,
       name,
       rank,
       trackingStatus,
+      usesMobileApp: Boolean(userEmail),
     }));
   }
 }

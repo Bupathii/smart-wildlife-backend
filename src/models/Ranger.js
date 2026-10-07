@@ -15,6 +15,8 @@ const rangerSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     rank: { type: String, default: 'Ranger' },
     phoneNumber: { type: String, default: '' },
+    /** Account the ranger signs in to the mobile app with (null = no app). */
+    userEmail: { type: String, default: null, lowercase: true, trim: true, index: true },
     trackingStatus: {
       type: String,
       enum: Object.values(TrackingStatus),

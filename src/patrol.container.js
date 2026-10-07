@@ -17,11 +17,13 @@ const { createConsoleLogger } = require('./utils/logger');
 const { createCoverageStrategy } = require('./strategies');
 const RouteMovementSimulator = require('./gps/RouteMovementSimulator');
 const SimulatedGpsTrackingService = require('./gps/SimulatedGpsTrackingService');
+const DeviceFirstGpsTrackingService = require('./gps/DeviceFirstGpsTrackingService');
 const calculators = require('./services/patrolCalculators');
 const monitoring = require('./services/patrolMonitoring.service');
 const queries = require('./services/patrolQuery.service');
 const evaluations = require('./services/patrolEvaluation.service');
 const routeManagement = require('./services/patrolRoute.service');
+const assignment = require('./services/patrolAssignment.service');
 const { createPatrolController } = require('./controllers/patrol.controller');
 const { createPatrolRouters } = require('./routes/patrol.routes');
 const { createPatrolErrorHandler } = require('./middleware/patrolError.middleware');
@@ -40,6 +42,18 @@ function createMongoRepositories() {
     zones: new parkRepositories.ZoneRepository(Park),
     routes: new parkRepositories.RouteRepository(Park),
   };
+}
+
+/**
+ * The GPS Tracking Service used in production: rangers with the mobile app
+ * are located by their phone, everyone else by the simulator.
+ */
+function createGpsService(repositories, clock, env) {
+  return new DeviceFirstGpsTrackingService({
+    rangerReader: repositories.rangers,
+    fallback: createSimulatedGps(repositories, clock, env),
+    isDown: () => env.GPS_DOWN === 'true',
+  });
 }
 
 /** The simulated GPS Tracking Service, controlled by environment flags. */
@@ -113,24 +127,57 @@ function createRecordServices(repositories, clock) {
   };
 }
 
+/** Planning (Park Manager, web) and carrying out a patrol (ranger, mobile app). */
+function createAssignmentServices({ repositories, contextLoader, viewAssembler, clock }) {
+  return {
+    planningService: new assignment.PatrolPlanningService({
+      patrolReader: repositories.patrols,
+      patrolWriter: repositories.patrols,
+      routeReader: repositories.routes,
+      rangerReader: repositories.rangers,
+      validator: new assignment.PatrolPlanValidator(config.PATROL_PLAN),
+    }),
+    rangerPatrolService: new assignment.RangerPatrolService({
+      patrolReader: repositories.patrols,
+      patrolWriter: repositories.patrols,
+      trackWriter: repositories.patrols,
+      rangerRepository: repositories.rangers,
+      contextLoader,
+      viewAssembler,
+      locationValidator: new assignment.DeviceLocationValidator(config.DEVICE_TRACKING),
+      clock,
+    }),
+  };
+}
+
+/** The two helpers that several services share. */
+function createSharedHelpers({ repositories, gpsService, clock, logger }) {
+  return {
+    contextLoader: new monitoring.PatrolContextLoader({
+      rangerReader: repositories.rangers,
+      routeReader: repositories.routes,
+      zoneReader: repositories.zones,
+    }),
+    locationService: new monitoring.RangerLocationService({
+      gpsService,
+      rangerRepository: repositories.rangers,
+      clock,
+      logger,
+      offlineAfterMinutes: config.OFFLINE_AFTER_MINUTES,
+    }),
+  };
+}
+
 /** Connects every service to its collaborators. */
 function createServices({ repositories, gpsService, clock, logger, calc }) {
-  const contextLoader = new monitoring.PatrolContextLoader({
-    rangerReader: repositories.rangers,
-    routeReader: repositories.routes,
-    zoneReader: repositories.zones,
-  });
-  const locationService = new monitoring.RangerLocationService({
-    gpsService,
-    rangerRepository: repositories.rangers,
-    clock,
-    logger,
-    offlineAfterMinutes: config.OFFLINE_AFTER_MINUTES,
-  });
+  const helpers = createSharedHelpers({ repositories, gpsService, clock, logger });
+  const { contextLoader, locationService } = helpers;
+  const { viewAssembler } = calc;
   const shared = { patrolReader: repositories.patrols, contextLoader, locationService, clock };
 
   return {
     ...createRecordServices(repositories, clock),
+    ...createAssignmentServices({ repositories, contextLoader, viewAssembler, clock }),
     locationService,
     monitoringService: new monitoring.PatrolMonitoringService({
       ...shared,
@@ -164,7 +211,7 @@ function createPatrolModule(overrides = {}) {
   const clock = overrides.clock ?? (() => new Date());
   const repositories = overrides.repositories ?? createMongoRepositories();
   const gpsService =
-    overrides.gpsService ?? createSimulatedGps(repositories, clock, overrides.env ?? process.env);
+    overrides.gpsService ?? createGpsService(repositories, clock, overrides.env ?? process.env);
   const calc = createCalculators(
     overrides.coverageStrategy ?? createCoverageStrategy(config),
     overrides.underPatrolledRules,
@@ -215,6 +262,7 @@ function mountPatrolMonitoring(app) {
     view: [protect, authorize(...viewers)],
     evaluate: [protect, authorize(...managers)],
     manage: [protect, authorize(...managers)],
+    ranger: [protect, authorize(ROLES.RANGER)],
   });
 }
 

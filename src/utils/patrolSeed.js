@@ -9,7 +9,8 @@
  *            (demonstrates the "No active patrols" screen, EX2)
  *
  * Only the Park / Ranger / Patrol collections for this park are replaced.
- * Users and conflict reports are never touched.
+ * Conflict reports are never touched. Existing user accounts are never
+ * changed; a login is created for an app ranger only if it is missing.
  */
 
 /* eslint-disable no-magic-numbers -- coordinates and sample values are data, not logic */
@@ -124,6 +125,36 @@ const RANGERS = [
  * `fraction` is how much of the route the track covers; `skip` lists
  * waypoint indexes the ranger passed too far from (lower coverage).
  */
+/**
+ * Rangers who use the mobile app. Each is linked to a login account, has no
+ * patrol yet (the Park Manager assigns one) and is located by their phone.
+ */
+const APP_RANGERS = [
+  {
+    rangerId: 'RN-007',
+    name: 'Dilan Fernando',
+    rank: 'Ranger',
+    phoneNumber: '0771000004',
+    userEmail: 'ranger.demo@wildlife.lk',
+  },
+  {
+    rangerId: 'RN-008',
+    name: 'Kavindu Bandara',
+    rank: 'Ranger',
+    phoneNumber: '0771234508',
+    userEmail: 'ranger2.demo@wildlife.lk',
+  },
+  {
+    rangerId: 'RN-009',
+    name: 'Tharshan Selvam',
+    rank: 'Senior Ranger',
+    phoneNumber: '0771234509',
+    userEmail: 'ranger3.demo@wildlife.lk',
+  },
+];
+const APP_RANGER_PASSWORD = 'Ranger@123';
+const APP_RANGERS_ONLY_FLAG = '--app-rangers-only';
+
 const IN_PROGRESS_PLANS = [
   {
     id: 'PT-001',
@@ -264,6 +295,17 @@ function buildRanger(ranger, patrols, now) {
     (patrol) =>
       patrol.status !== PatrolStatus.COMPLETED && patrol.rangerIds.includes(ranger.rangerId),
   );
+  if (ranger.userEmail) {
+    // Located by their phone: nothing is known until the app reports in.
+    return {
+      ...ranger,
+      parkId: PARK_ID,
+      trackingStatus: TrackingStatus.OFFLINE,
+      lastSyncTime: null,
+      lastKnownLocation: null,
+    };
+  }
+
   const lastPoint = current?.track.at(-1);
   const offline = !current || config.SIMULATED_GPS.OFFLINE_RANGER_IDS.includes(ranger.rangerId);
 
@@ -303,9 +345,47 @@ function buildSeedData({ now = new Date(), includeActive = true } = {}) {
       zones: ZONES,
       routes: ROUTES,
     },
-    rangers: RANGERS.map((ranger) => buildRanger(ranger, patrols, now)),
+    rangers: [...RANGERS, ...APP_RANGERS].map((ranger) => buildRanger(ranger, patrols, now)),
     patrols,
   };
+}
+
+/**
+ * Makes sure each app ranger has a login. Existing accounts are left exactly
+ * as they are; only missing ones are created.
+ */
+async function ensureAppRangerLogins(logger) {
+  const bcrypt = require('bcryptjs');
+  const User = require('../models/User');
+  const SALT_ROUNDS = 10;
+
+  for (const ranger of APP_RANGERS) {
+    if (await User.exists({ email: ranger.userEmail })) continue;
+    await User.create({
+      name: ranger.name,
+      email: ranger.userEmail,
+      password: await bcrypt.hash(APP_RANGER_PASSWORD, SALT_ROUNDS),
+      role: 'RANGER',
+      phone: ranger.phoneNumber,
+      status: 'ACTIVE',
+    });
+    logger.info('Created ranger login', ranger.userEmail);
+  }
+}
+
+/**
+ * `npm run seed:app-rangers` (or SEED_APP_RANGERS_ONLY=true): adds the app rangers and their logins
+ * without touching the park, its routes, the other rangers or any patrol.
+ */
+async function addAppRangersOnly(rangers, Ranger, logger) {
+  const appRangers = rangers.filter((ranger) => ranger.userEmail);
+
+  for (const ranger of appRangers) {
+    const exists = await Ranger.exists({ rangerId: ranger.rangerId });
+    if (!exists) await Ranger.create(ranger);
+  }
+  await ensureAppRangerLogins(logger);
+  logger.info('App rangers are ready:', appRangers.map((ranger) => ranger.userEmail).join(', '));
 }
 
 /** Replaces this park's sample data in the configured database. */
@@ -322,10 +402,19 @@ async function runSeed() {
   const data = buildSeedData({ includeActive: process.env.SEED_NO_ACTIVE !== 'true' });
 
   await mongoose.connect(process.env.MONGODB_URI);
+  const rangersOnly =
+    process.env.SEED_APP_RANGERS_ONLY === 'true' || process.argv.includes(APP_RANGERS_ONLY_FLAG);
+  if (rangersOnly) {
+    await addAppRangersOnly(data.rangers, Ranger, logger);
+    await mongoose.disconnect();
+    return;
+  }
+
   await Promise.all([Park, Ranger, Patrol].map((model) => model.deleteMany({ parkId: PARK_ID })));
   await Park.create(data.park);
   await Ranger.insertMany(data.rangers);
   await Patrol.insertMany(data.patrols);
+  await ensureAppRangerLogins(logger);
   await mongoose.disconnect();
 
   logger.info(

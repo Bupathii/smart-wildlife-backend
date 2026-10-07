@@ -42,8 +42,8 @@ function toMongoFilter(criteria) {
  *
  * SOLID-S: data access only - no progress, coverage or validation rules.
  *
- * It fulfils three contracts: PatrolReader (inherited), EvaluationWriter
- * and TrackWriter (JavaScript allows one parent class, so the two writer
+ * It fulfils four contracts: PatrolReader (inherited), PatrolWriter,
+ * EvaluationWriter and TrackWriter (JavaScript allows one parent class, so the writer
  * contracts are met by implementing their methods).
  */
 class PatrolRepository extends PatrolReader {
@@ -102,6 +102,38 @@ class PatrolRepository extends PatrolReader {
    */
   async appendTrackPoint(patrolId, point) {
     await this.patrolModel.updateOne({ patrolId }, { $push: { track: point } });
+  }
+
+  /**
+   * @param {string} patrolId
+   * @param {object[]} points LocationPoint data, oldest first
+   * @returns {Promise<void>}
+   */
+  async appendTrackPoints(patrolId, points) {
+    await this.patrolModel.updateOne({ patrolId }, { $push: { track: { $each: points } } });
+  }
+
+  /** @returns {Promise<string[]>} */
+  async findPatrolIds() {
+    const documents = await this.patrolModel.find({}, { patrolId: 1 }).lean();
+    return documents.map((document) => document.patrolId);
+  }
+
+  /** @param {object} patrol complete patrol data @returns {Promise<void>} */
+  async createPatrol(patrol) {
+    await this.patrolModel.create(patrol);
+  }
+
+  /**
+   * @param {string} patrolId
+   * @param {object} changes fields to replace
+   * @returns {Promise<object|null>} the updated patrol
+   */
+  async updatePatrol(patrolId, changes) {
+    const updated = await this.patrolModel
+      .findOneAndUpdate({ patrolId }, { $set: changes }, { new: true, runValidators: true })
+      .lean();
+    return toPatrol(updated);
   }
 
   async #find(filter, sort) {

@@ -569,12 +569,13 @@ test('reference data provides the park map and the ranger list', async () => {
   );
   assert.equal(map.routes.length, 4);
   assert.ok(map.routes.every((route) => route.waypoints.length >= 5));
-  assert.equal(rangers.length, 6);
+  assert.equal(rangers.length, 9);
   assert.deepEqual(rangers[0], {
     rangerId: 'RN-001',
     name: 'Thilina Perera',
     rank: 'Senior Ranger',
     trackingStatus: TrackingStatus.ONLINE,
+    usesMobileApp: false,
   });
   await assert.rejects(() => referenceService.getParkMap('PK-NOWHERE'), NotFoundError);
 });
@@ -882,7 +883,8 @@ test('the sample data matches the scenario preconditions', () => {
 
   assert.equal(full.park.zones.length, 4);
   assert.equal(full.park.routes.length, 4);
-  assert.equal(full.rangers.length, 6);
+  assert.equal(full.rangers.length, 9);
+  assert.equal(full.rangers.filter((ranger) => ranger.userEmail).length, 3);
   assert.equal(count(full.patrols, PatrolStatus.ACTIVE), 3);
   assert.equal(count(full.patrols, PatrolStatus.DELAYED), 1);
   assert.equal(count(full.patrols, PatrolStatus.COMPLETED), 4);
