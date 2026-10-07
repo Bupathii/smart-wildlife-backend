@@ -23,6 +23,8 @@ app.use(
   require('./routes/conflict.routes')
 );
 
+require('./patrol.container').mountPatrolMonitoring(app);
+
 app.use(notFoundHandler);
 
 app.use(errorHandler);
