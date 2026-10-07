@@ -57,7 +57,11 @@ class ZoneRepository extends ZoneReader {
   }
 }
 
-/** PATTERN-Repository: MongoDB access for patrol routes. */
+/**
+ * PATTERN-Repository: MongoDB access for patrol routes. Fulfils RouteReader
+ * (inherited) and RouteWriter (createRoute / updateRoute / deleteRoute).
+ * Routes live inside their park document (composition).
+ */
 class RouteRepository extends RouteReader {
   /** @param {import('mongoose').Model} parkModel injected Mongoose model */
   constructor(parkModel) {
@@ -79,6 +83,40 @@ class RouteRepository extends RouteReader {
   async findByRouteId(routeId) {
     const routes = await this.#load({ 'routes.routeId': routeId });
     return routes.find((route) => route.routeId === routeId) ?? null;
+  }
+
+  /**
+   * @param {string} parkId
+   * @param {object} route complete route data
+   * @returns {Promise<void>}
+   */
+  async createRoute(parkId, route) {
+    await this.parkModel.updateOne(
+      { parkId },
+      { $push: { routes: route } },
+      { runValidators: true },
+    );
+  }
+
+  /**
+   * @param {string} routeId
+   * @param {object} route complete replacement data
+   * @returns {Promise<void>}
+   */
+  async updateRoute(routeId, route) {
+    await this.parkModel.updateOne(
+      { 'routes.routeId': routeId },
+      { $set: { 'routes.$': route } },
+      { runValidators: true },
+    );
+  }
+
+  /** @param {string} routeId @returns {Promise<void>} */
+  async deleteRoute(routeId) {
+    await this.parkModel.updateOne(
+      { 'routes.routeId': routeId },
+      { $pull: { routes: { routeId } } },
+    );
   }
 
   async #load(filter) {

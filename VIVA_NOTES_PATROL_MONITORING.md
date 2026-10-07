@@ -14,6 +14,7 @@ Paths starting with `src/` or `tests/` are in the **backend** repo (`smart-wildl
 | S | `src/services/patrolEvaluation.service.js:13` `EvaluationValidator` and `:37` `PatrolEvaluationService` | The validator checks input; the service runs the "record evaluation" flow; the repository stores it. | A single method would validate, decide and save — a long method that is hard to test for each rule. |
 | S | `src/services/patrolQuery.service.js:28` `PatrolFilterBuilder` | Turns query-string text into validated filter criteria. | Controllers would parse dates and statuses themselves (fat controllers). |
 | S | `src/services/patrolMonitoring.service.js:46` `RangerLocationService`, `:149` `PatrolTrackRecorder`, `:180` `PatrolContextLoader`, `:222` `PatrolViewAssembler` | One job each: get locations with fallback, store new fixes, load related data, shape a patrol for display. | The monitoring service would need all four reasons to change. |
+| S | `src/services/patrolRoute.service.js:33` `RouteValidator` and `:113` `PatrolRouteService` | The validator checks route input; the service runs create / edit / delete and protects routes that patrols are using. | Route rules would leak into the controller or the repository. |
 | S | `src/controllers/patrol.controller.js:6` | Controllers only translate HTTP to a service call. | Business rules in controllers cannot be unit-tested without HTTP. |
 | S | `src/repositories/PatrolRepository.js:43` | Database access only. | Queries scattered through services; changing the database would touch business code. |
 | S | `FE: components/PatrolMap.jsx:66`, `FE: components/PatrolTable.jsx:56`, `FE: components/EvaluationForm.jsx:53`, `FE: components/PatrolWidgets.jsx:70` (`OfflineBadge`), `:96` (`SummaryCards`), `FE: hooks/usePatrolData.js:15` | Each React component draws one thing from props; loading and polling live in one hook. | Pages would each re-implement fetching, polling and error states. |
@@ -25,8 +26,9 @@ Paths starting with `src/` or `tests/` are in the **backend** repo (`smart-wildl
 | L | `tests/patrol.helpers.js` in-memory repositories | They extend the same contracts as the MongoDB repositories, so every service runs unchanged on either. | Tests would need a real database. |
 | **I** — Interface Segregation | `src/repositories/patrolContracts.js:7` (`PatrolReader :19`, `EvaluationWriter :47`, `TrackWriter :55`, `RangerReader :63`, `RangerTrackingWriter :81`, …) | Small role-based contracts instead of one big repository interface. | A service that only reads would still depend on (and could misuse) write methods. |
 | I | `src/services/patrolMonitoring.service.js:315`, `src/services/patrolQuery.service.js:83` | These services are given only a `PatrolReader`. | A monitoring bug could accidentally overwrite an evaluation. |
-| I | `src/services/patrolEvaluation.service.js:32`, wiring at `src/patrol.container.js:91` | Needs exactly `PatrolReader` + `EvaluationWriter`. Test T-25 (`tests/patrol.services.test.js:514`) runs it with two tiny hand-written stubs. | Tests would have to fake a whole repository to test one method. |
-| **D** — Dependency Inversion | `src/patrol.container.js:6` (`createPatrolModule :153`) | The composition root: the only place that says `new PatrolRepository(...)` or picks the GPS service. Services receive repositories, GPS service, strategy, clock and logger through constructors. | Services would import mongoose / create their own GPS client, so they could not be tested without a database or the network. |
+| I | `src/services/patrolEvaluation.service.js:32`, wiring at `src/patrol.container.js:92` | Needs exactly `PatrolReader` + `EvaluationWriter`. Test T-25 (`tests/patrol.services.test.js:514`) runs it with two tiny hand-written stubs. | Tests would have to fake a whole repository to test one method. |
+| I | `src/services/patrolRoute.service.js:109` | Needs `RouteReader`, `RouteWriter`, `ZoneReader`, `ParkReader`, `PatrolReader` - each a small contract (`RouteWriter` is in `src/repositories/patrolContracts.js`). | Route management would depend on every method of every repository. |
+| **D** — Dependency Inversion | `src/patrol.container.js:6` (`createPatrolModule :162`) | The composition root: the only place that says `new PatrolRepository(...)` or picks the GPS service. Services receive repositories, GPS service, strategy, clock and logger through constructors. | Services would import mongoose / create their own GPS client, so they could not be tested without a database or the network. |
 | D | `src/services/patrolMonitoring.service.js:43`, `:316`; `src/services/patrolEvaluation.service.js:35`; `src/services/patrolQuery.service.js:84`; `src/services/patrolCalculators.js:66` | Each depends on abstractions (`GpsTrackingService`, repository contracts, `CoverageStrategy`, `clock`). T-25 (`tests/patrol.services.test.js:502`) injects a fake clock and fake repositories. | Time-based rules (15 min offline, 24 h, 48 h) would be untestable because `new Date()` would be hard-coded. |
 | D | `FE: hooks/usePatrolData.js:16` | The hook receives a `load` function; it does not know which API it calls. | One hook per screen with copied polling logic. |
 
@@ -35,12 +37,12 @@ Paths starting with `src/` or `tests/` are in the **backend** repo (`smart-wildl
 | Pattern | File : line | Why it is used |
 |---|---|---|
 | **MVC / layered** | `src/routes/patrol.routes.js:18` → `src/controllers/patrol.controller.js:8` → `src/services/*` → `src/repositories/*` | Each layer has one concern; business rules are testable without HTTP or a database. |
-| **Repository** | `src/repositories/PatrolRepository.js:40`, `RangerRepository.js:15`, `ParkRepositories.js:12/34/60` | Hides MongoDB behind the contracts in `patrolContracts.js`; tests swap in in-memory versions. |
+| **Repository** | `src/repositories/PatrolRepository.js:40`, `RangerRepository.js:15`, `ParkRepositories.js:12/34/61` | Hides MongoDB behind the contracts in `patrolContracts.js`; tests swap in in-memory versions. |
 | **Strategy** | `src/strategies/CoverageStrategy.js:30`, `ZoneProximityCoverageStrategy.js:6`, `TimeWeightedCoverageStrategy.js:8` | Coverage can be measured in more than one way; the formula is chosen in config and injected. |
 | **Template Method** | `src/strategies/CoverageStrategy.js:36` | The base class fixes the steps (find zone waypoints → score each → average); subclasses only supply `scoreWaypoint()`, so the shared steps are not duplicated. |
 | **Adapter** | `src/gps/SimulatedGpsTrackingService.js:9` adapting `src/gps/RouteMovementSimulator.js` | The external provider speaks `{ lat, lng, recordedAt }` and throws plain errors; the adapter converts that to `LocationPoint` and `GpsServiceUnavailableError`. A real provider later needs only a new adapter. |
-| **Factory** | `src/patrol.container.js:9` (`createPatrolModule`, `createPatrolApp :187`), `src/strategies/index.js:7` | One function builds the object graph; tests call it with fakes (`createPatrolApp({ repositories, gpsService })`). |
-| **Dependency Injection** | constructors of every service; wired in `src/patrol.container.js:108` | See SOLID-D. |
+| **Factory** | `src/patrol.container.js:9` (`createPatrolModule`, `createPatrolApp :196`), `src/strategies/index.js:7` | One function builds the object graph; tests call it with fakes (`createPatrolApp({ repositories, gpsService })`). |
+| **Dependency Injection** | constructors of every service; wired in `src/patrol.container.js:117` | See SOLID-D. |
 | **Value Object** | `src/models/patrolDomain.js:23` `LocationPoint` (frozen) | A position is passed around as one immutable object with its own behaviour (`isValid`, `calculateDistance`). |
 | **Custom error hierarchy + central handler** | `src/errors/patrolErrors.js`, `src/middleware/patrolError.middleware.js:25` | Services throw `NotFoundError` / `ValidationError`; one middleware logs and turns them into `{ error: { code, message } }`. |
 
@@ -62,7 +64,7 @@ Paths starting with `src/` or `tests/` are in the **backend** repo (`smart-wildl
 
 ## 4. Flow traceability
 
-Precondition (not implemented here): the Park Manager is already signed in. The flow starts when the manager opens the Patrols page.
+Precondition (not part of this use case): the Park Manager is already signed in. The flow starts when the manager opens the Patrols page.
 
 | Flow | Frontend screen | API endpoint | Service method | Test |
 |---|---|---|---|---|
@@ -80,6 +82,7 @@ Precondition (not implemented here): the Park Manager is already signed in. The 
 | AF2 — Completed Patrol History | `FE: pages/PatrolHistory.jsx` | `GET /api/patrols/completed` | `PatrolQueryService.getCompletedHistory` | T-11, T-22 |
 | AF3 — Inspect another patrol | Row click in any table | `GET /api/patrols/:patrolId` | `getPatrolDetails` | T-12, T-22 |
 | AF4 — Record Patrol Evaluation | `FE: components/EvaluationForm.jsx` | `PUT /api/patrols/:patrolId/evaluation` | `PatrolEvaluationService.recordEvaluation` | T-13, T-17, T-18, T-22 |
+| Supporting — manage patrol routes (the "routes configured" precondition) | `FE: pages/PatrolRoutes.jsx`, `FE: components/RouteEditorMap.jsx` | `GET / POST /api/parks/:parkId/routes`, `PUT / DELETE /api/parks/:parkId/routes/:routeId` | `PatrolRouteService.listRoutes / createRoute / updateRoute / deleteRoute` | `tests/patrol.routes.test.js` |
 | EX1 — ranger location unavailable | Grey marker, "Offline – last synced HH:MM", Retry | `GET /api/rangers/:rangerId/location` | `RangerLocationService.locateRanger` / `#markOffline` | T-06, retry test, T-22 |
 | EX2 — no active patrols | Empty state + "View completed patrols" | `GET /api/patrols/monitoring` (`noActivePatrols`) | `getDashboard` | T-08, T-22 |
 | EX3 — GPS service unavailable | Yellow banner | same (`gpsStatus: "UNAVAILABLE"`) | `RangerLocationService.#fetchFixes` | T-07, T-22 |
@@ -116,12 +119,14 @@ Sign in as the Park Manager (`manager.demo@wildlife.lk`) and click **Patrols** i
 9. **Refresh failure (EX4)** — with the dashboard open, stop the backend: after the next refresh it shows "Could not refresh – showing data from HH:MM" and keeps the last data. Reload the page with the backend still stopped to show the full error screen with **Try again**.
 10. **No active patrols (EX2)** — run `SEED_NO_ACTIVE=true npm run seed:patrols` (PowerShell: `$env:SEED_NO_ACTIVE='true'; npm run seed:patrols`), refresh: "No active patrols are currently running" with **View completed patrols**. Run `npm run seed:patrols` again (without the flag) to restore the data.
 
+11. **Patrol routes (supporting screen)** — click **Patrol Routes** in the sidebar. Press **New route**, type a name, click the map to drop waypoints inside the outlined zones, and save: the length and zones are filled in automatically, and the route now appears on the dashboard map and in the filter. Try to delete *Block 1 North Circuit* (the button is disabled because patrols use it), and open its Edit form to show that waypoints are locked while a patrol is on the route.
+
 Other flag: `GPS_OFFLINE_RANGERS=RN-001,RN-005` chooses which rangers have no signal (empty value = everybody online).
 
 Quality checks to show:
 
 ```bash
-npm run test:patrol            # 74 tests
+npm run test:patrol            # 91 tests
 npm run test:coverage:patrol   # coverage table (about 99 % lines, 98 % branches)
 npm run lint:patrol            # 0 errors
 ```

@@ -21,6 +21,7 @@ const calculators = require('./services/patrolCalculators');
 const monitoring = require('./services/patrolMonitoring.service');
 const queries = require('./services/patrolQuery.service');
 const evaluations = require('./services/patrolEvaluation.service');
+const routeManagement = require('./services/patrolRoute.service');
 const { createPatrolController } = require('./controllers/patrol.controller');
 const { createPatrolRouters } = require('./routes/patrol.routes');
 const { createPatrolErrorHandler } = require('./middleware/patrolError.middleware');
@@ -94,6 +95,14 @@ function createRecordServices(repositories, clock) {
       evaluationWriter: repositories.patrols,
       validator: new evaluations.EvaluationValidator(),
       clock,
+    }),
+    routeService: new routeManagement.PatrolRouteService({
+      routeReader: repositories.routes,
+      routeWriter: repositories.routes,
+      zoneReader: repositories.zones,
+      parkReader: repositories.parks,
+      patrolReader: repositories.patrols,
+      validator: new routeManagement.RouteValidator(config.ROUTE),
     }),
     referenceService: new queries.PatrolReferenceService({
       parkReader: repositories.parks,
@@ -200,11 +209,12 @@ function mountPatrolMonitoring(app) {
   const { protect, authorize } = require('./middleware/auth.middleware');
   const { ROLES } = require('./constants/roles');
   const viewers = [ROLES.PARK_MANAGER, ROLES.ADMIN, ROLES.RANGER_SUPERVISOR];
-  const evaluators = [ROLES.PARK_MANAGER, ROLES.ADMIN];
+  const managers = [ROLES.PARK_MANAGER, ROLES.ADMIN];
 
   createPatrolModule().mount(app, {
     view: [protect, authorize(...viewers)],
-    evaluate: [protect, authorize(...evaluators)],
+    evaluate: [protect, authorize(...managers)],
+    manage: [protect, authorize(...managers)],
   });
 }
 

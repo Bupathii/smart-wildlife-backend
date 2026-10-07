@@ -2,6 +2,7 @@
 
 const HTTP_BAD_REQUEST = 400;
 const HTTP_NOT_FOUND = 404;
+const HTTP_CONFLICT = 409;
 const HTTP_SERVER_ERROR = 500;
 const HTTP_SERVICE_UNAVAILABLE = 503;
 
@@ -41,6 +42,13 @@ class ValidationError extends AppError {
   }
 }
 
+/** The request is valid but clashes with existing data (e.g. a route in use). */
+class ConflictError extends AppError {
+  constructor(message) {
+    super(message, { statusCode: HTTP_CONFLICT, code: 'CONFLICT' });
+  }
+}
+
 /** The external GPS Tracking Service could not be reached. */
 class GpsServiceUnavailableError extends AppError {
   constructor(message = 'GPS Tracking Service is unavailable') {
@@ -55,6 +63,7 @@ module.exports = {
   AppError,
   NotFoundError,
   ValidationError,
+  ConflictError,
   GpsServiceUnavailableError,
   HTTP_SERVER_ERROR,
 };

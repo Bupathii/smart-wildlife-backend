@@ -35,6 +35,13 @@ const patrolConfig = Object.freeze({
     NOTES_REQUIRED_AT_OR_BELOW: 2,
   }),
 
+  ROUTE: Object.freeze({
+    MIN_WAYPOINTS: 2,
+    MAX_WAYPOINTS: 50,
+    NAME_MAX_LENGTH: 80,
+    DESCRIPTION_MAX_LENGTH: 300,
+  }),
+
   SIMULATED_GPS: Object.freeze({
     /** Distance a simulated ranger moves along the route per GPS request. */
     STEP_KM: 0.12,

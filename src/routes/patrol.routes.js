@@ -11,13 +11,14 @@ const { asyncHandler } = require('../middleware/patrolError.middleware');
  * @param {object} deps
  * @param {object} deps.controller result of createPatrolController()
  * @param {import('express').ErrorRequestHandler} deps.errorHandler
- * @param {{ view?: Function[], evaluate?: Function[] }} [deps.guards]
- *        optional middleware run before viewing / before saving an evaluation
+ * @param {{ view?: Function[], evaluate?: Function[], manage?: Function[] }} [deps.guards]
+ *        optional middleware run before viewing / saving an evaluation / changing routes
  * @returns {{ patrols: import('express').Router, parks: import('express').Router, rangers: import('express').Router }}
  */
 function createPatrolRouters({ controller, errorHandler, guards = {} }) {
   const view = guards.view ?? [];
   const evaluate = guards.evaluate ?? view;
+  const manage = guards.manage ?? evaluate;
 
   const patrols = express.Router();
   // Fixed paths are registered before "/:patrolId" so they are not captured by it.
@@ -31,6 +32,10 @@ function createPatrolRouters({ controller, errorHandler, guards = {} }) {
 
   const parks = express.Router();
   parks.get('/:parkId/zones', view, asyncHandler(controller.getParkMap));
+  parks.get('/:parkId/routes', view, asyncHandler(controller.listRoutes));
+  parks.post('/:parkId/routes', manage, asyncHandler(controller.createRoute));
+  parks.put('/:parkId/routes/:routeId', manage, asyncHandler(controller.updateRoute));
+  parks.delete('/:parkId/routes/:routeId', manage, asyncHandler(controller.deleteRoute));
   parks.use(errorHandler);
 
   const rangers = express.Router();
