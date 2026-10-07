@@ -193,13 +193,13 @@ const conflictReportSchema =
        * ===============================================
        * ADMIN ARCHIVE
        *
-       * We do NOT permanently delete conflict reports.
+       
        *
        * Archived records are retained for:
        * - history
        * - auditing
        * - accidental archive recovery
-       *
+       * - and also delete if necessary
        * Normal application queries automatically
        * exclude archived reports.
        * ===============================================

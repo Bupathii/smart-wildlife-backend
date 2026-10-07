@@ -13,6 +13,7 @@ const STAFF_ROLES = [
   'PARK_MANAGER',
   'RANGER_SUPERVISOR',
   'ADMIN',
+  'RESEARCHER',
 ];
 
 const RESPONSE_ROLES = [
