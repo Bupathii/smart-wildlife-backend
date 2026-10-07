@@ -124,6 +124,24 @@ class RouteReader {
   }
 }
 
+/** Creates, changes and removes patrol routes. */
+class RouteWriter {
+  /** @returns {Promise<void>} */
+  async createRoute() {
+    throw notImplemented('RouteWriter', 'createRoute');
+  }
+
+  /** @returns {Promise<void>} */
+  async updateRoute() {
+    throw notImplemented('RouteWriter', 'updateRoute');
+  }
+
+  /** @returns {Promise<void>} */
+  async deleteRoute() {
+    throw notImplemented('RouteWriter', 'deleteRoute');
+  }
+}
+
 module.exports = {
   PatrolReader,
   EvaluationWriter,
@@ -133,4 +151,5 @@ module.exports = {
   ParkReader,
   ZoneReader,
   RouteReader,
+  RouteWriter,
 };

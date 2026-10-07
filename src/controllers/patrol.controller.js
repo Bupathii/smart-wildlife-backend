@@ -68,6 +68,37 @@ function referenceHandlers({ referenceService, locationService }) {
   };
 }
 
+const HTTP_CREATED = 201;
+const HTTP_NO_CONTENT = 204;
+
+/** Handlers for managing patrol routes under /api/parks/:parkId/routes. */
+function routeHandlers({ routeService }) {
+  return {
+    /** GET /api/parks/:parkId/routes */
+    async listRoutes(req, res) {
+      res.json({ routes: await routeService.listRoutes(req.params.parkId) });
+    },
+
+    /** POST /api/parks/:parkId/routes */
+    async createRoute(req, res) {
+      const route = await routeService.createRoute(req.params.parkId, req.body ?? {});
+      res.status(HTTP_CREATED).json(route);
+    },
+
+    /** PUT /api/parks/:parkId/routes/:routeId */
+    async updateRoute(req, res) {
+      const { parkId, routeId } = req.params;
+      res.json(await routeService.updateRoute(parkId, routeId, req.body ?? {}));
+    },
+
+    /** DELETE /api/parks/:parkId/routes/:routeId */
+    async deleteRoute(req, res) {
+      await routeService.deleteRoute(req.params.parkId, req.params.routeId);
+      res.status(HTTP_NO_CONTENT).end();
+    },
+  };
+}
+
 /**
  * @param {object} services
  * @param {object} services.monitoringService PatrolMonitoringService
@@ -75,10 +106,15 @@ function referenceHandlers({ referenceService, locationService }) {
  * @param {object} services.evaluationService PatrolEvaluationService
  * @param {object} services.locationService RangerLocationService
  * @param {object} services.referenceService PatrolReferenceService
+ * @param {object} services.routeService PatrolRouteService
  * @returns {Object<string, (req: object, res: object) => Promise<void>>}
  */
 function createPatrolController(services) {
-  return { ...patrolHandlers(services), ...referenceHandlers(services) };
+  return {
+    ...patrolHandlers(services),
+    ...referenceHandlers(services),
+    ...routeHandlers(services),
+  };
 }
 
 module.exports = { createPatrolController };

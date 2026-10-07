@@ -148,6 +148,23 @@ class InMemoryRouteRepository extends contracts.RouteReader {
   async findByRouteId(routeId) {
     return (await this.findAll()).find((route) => route.routeId === routeId) ?? null;
   }
+
+  async createRoute(parkId, route) {
+    this.parks.find((park) => park.parkId === parkId).routes.push(copy(route));
+  }
+
+  async updateRoute(routeId, route) {
+    for (const park of this.parks) {
+      const index = park.routes.findIndex((item) => item.routeId === routeId);
+      if (index >= 0) park.routes[index] = copy(route);
+    }
+  }
+
+  async deleteRoute(routeId) {
+    for (const park of this.parks) {
+      park.routes = park.routes.filter((item) => item.routeId !== routeId);
+    }
+  }
 }
 
 /**
@@ -181,7 +198,7 @@ function createSilentLogger() {
 /** In-memory repositories loaded with the Yala sample data. */
 function createRepositories({ now = NOW, includeActive = true, patrols, rangers } = {}) {
   const seed = buildSeedData({ now, includeActive });
-  const parks = [seed.park];
+  const parks = [copy(seed.park)];
 
   return {
     seed,
