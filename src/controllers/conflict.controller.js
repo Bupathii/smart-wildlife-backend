@@ -431,7 +431,8 @@ async function createConflictReport(
         const result =
           await uploadBuffer(
             file.buffer,
-            'wildlife-conflict-reports'
+            'wildlife-conflict-reports',
+            file.originalname
           );
 
         uploadedEvidence.push({
