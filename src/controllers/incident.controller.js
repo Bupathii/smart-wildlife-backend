@@ -132,15 +132,8 @@ function validateIncidentInput(body, files) {
     };
   }
 
-  if (!files || files.length === 0) {
-    return {
-      valid: false,
-      missingFields: ['evidence'],
-      message: 'At least one evidence photo is required',
-      parsedLatitude,
-      parsedLongitude,
-    };
-  }
+  // Evidence photos are optional — mobile app may not always have photos available.
+  // When provided they are uploaded to Cloudinary; when absent the report is still accepted.
 
   return { valid: true, missingFields: [], message: null, parsedLatitude, parsedLongitude };
 }
@@ -206,7 +199,7 @@ async function createIncidentReport(req, res, next) {
     /*
      * Step 2 — upload evidence photos to Cloudinary (EvidencePhoto.upload)
      */
-    for (const file of req.files) {
+    for (const file of (req.files || [])) {
       const result = await uploadBuffer(file.buffer, CLOUDINARY_FOLDER);
 
       uploadedEvidence.push({
