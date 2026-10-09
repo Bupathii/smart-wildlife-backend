@@ -13,6 +13,7 @@ const {
   createIncidentReport,
   getMyIncidentReports,
   getAllIncidentReports,
+  updateIncidentStatus,
 } = require('../controllers/incident.controller');
 
 // All routes require a valid JWT
@@ -38,6 +39,13 @@ router.get(
   '/',
   authorize('ADMIN', 'PARK_MANAGER', 'RANGER_SUPERVISOR', 'RESEARCHER'),
   getAllIncidentReports
+);
+
+// PATCH /api/incidents/:id/status — status update (PARK_MANAGER / RANGER_SUPERVISOR only)
+router.patch(
+  '/:id/status',
+  authorize('ADMIN', 'PARK_MANAGER', 'RANGER_SUPERVISOR'),
+  updateIncidentStatus
 );
 
 module.exports = router;
