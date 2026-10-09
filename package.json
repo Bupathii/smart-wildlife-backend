@@ -5,8 +5,8 @@
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "start": "node init && node src/server.js",
+    "dev": "node init && nodemon src/server.js",
     "seed": "node src/utils/seed.js",
     "test": "node --test --test-concurrency=1 tests/conflict.archive.test.js tests/conflict.controller.test.js tests/incident.controller.test.js",
     "test:incident": "node --test --test-concurrency=1 tests/incident.controller.test.js",
