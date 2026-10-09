@@ -331,7 +331,68 @@ async function getMyIncidentReports(req, res, next) {
   }
 }
 
+/*
+ * GET /api/incidents — web roles (ADMIN, PARK_MANAGER, RANGER_SUPERVISOR, RESEARCHER).
+ * Returns all incident reports, newest first, with optional filters and pagination.
+ *
+ * Query params:
+ *   page          {number} default 1
+ *   limit         {number} default 20, max 100
+ *   incidentType  {string} filter by type
+ *   incidentStatus {string} filter by status
+ *   severity      {string} filter by severity
+ *
+ * @param {import('express').Request}  req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ */
+async function getAllIncidentReports(req, res, next) {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.limit, 10) || 20)
+    );
+    const skip = (page - 1) * limit;
+
+    const filter = {};
+
+    if (req.query.incidentType) {
+      filter.incidentType = req.query.incidentType;
+    }
+
+    if (req.query.incidentStatus) {
+      filter.incidentStatus = req.query.incidentStatus;
+    }
+
+    if (req.query.severity) {
+      filter.severity = req.query.severity;
+    }
+
+    const [reports, total] = await Promise.all([
+      IncidentReport.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate({ path: 'ranger', select: 'name email role' }),
+
+      IncidentReport.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      reports,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   createIncidentReport,
   getMyIncidentReports,
+  getAllIncidentReports,
 };
