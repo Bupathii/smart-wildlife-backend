@@ -10,6 +10,8 @@
     "seed": "node src/utils/seed.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
     "test:coverage": "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=src/controllers/conflict.controller.js --test-coverage-include=src/controllers/conflictArchive.controller.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/*.test.js",
+    "test:incident": "node --test --test-concurrency=1 tests/incident.controller.test.js",
+    "test:coverage:incident": "node --test --test-concurrency=1 --experimental-test-coverage tests/incident.controller.test.js",
     "seed:patrols": "node src/utils/patrolSeed.js",
     "seed:app-rangers": "node src/utils/patrolSeed.js --app-rangers-only",
     "test:patrol": "node --test --test-concurrency=1 --test-reporter=spec tests/patrol.*.test.js",

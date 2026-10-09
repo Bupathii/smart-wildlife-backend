@@ -32,6 +32,11 @@ app.use(
 
 require('./patrol.container').mountPatrolMonitoring(app);
 
+app.use(
+  '/api/incidents',
+  require('./routes/incident.routes')
+);
+
 app.use(notFoundHandler);
 
 app.use(errorHandler);
