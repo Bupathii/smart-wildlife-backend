@@ -391,8 +391,56 @@ async function getAllIncidentReports(req, res, next) {
   }
 }
 
+/*
+ * PATCH /api/incidents/:id/status — PARK_MANAGER / RANGER_SUPERVISOR.
+ * Updates only the incidentStatus field on a single report.
+ *
+ * Body:
+ *   incidentStatus {string} one of INCIDENT_STATUSES
+ *
+ * @param {import('express').Request}  req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ */
+async function updateIncidentStatus(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { incidentStatus } = req.body;
+
+    const { INCIDENT_STATUSES } = require('../models/IncidentReport');
+
+    if (!incidentStatus || !INCIDENT_STATUSES.includes(incidentStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `incidentStatus must be one of: ${INCIDENT_STATUSES.join(', ')}`,
+      });
+    }
+
+    const report = await IncidentReport.findByIdAndUpdate(
+      id,
+      { incidentStatus },
+      { new: true, runValidators: true }
+    ).populate({ path: 'ranger', select: 'name email role' });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: 'Incident report not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      report,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   createIncidentReport,
   getMyIncidentReports,
   getAllIncidentReports,
+  updateIncidentStatus,
 };
