@@ -289,26 +289,28 @@ test('createIncidentReport — latitude provided without longitude returns 400',
   assert.ok(res.body.missingFields.includes('longitude'));
 });
 
-test('createIncidentReport — no evidence files returns 400', async () => {
+test('createIncidentReport — no evidence files is accepted (evidence optional)', async () => {
   const req = baseReq({ files: [] });
   const res = createResponse();
   const next = createNext();
 
   await controller.createIncidentReport(req, res, next);
 
-  assert.equal(res.statusCode, 400);
-  assert.ok(res.body.missingFields.includes('evidence'));
+  // Evidence is optional — report should be created successfully
+  assert.equal(res.statusCode, 201);
+  assert.ok(res.body.success);
 });
 
-test('createIncidentReport — null files returns 400', async () => {
+test('createIncidentReport — null files is accepted (evidence optional)', async () => {
   const req = baseReq({ files: null });
   const res = createResponse();
   const next = createNext();
 
   await controller.createIncidentReport(req, res, next);
 
-  assert.equal(res.statusCode, 400);
-  assert.ok(res.body.missingFields.includes('evidence'));
+  // Evidence is optional — null files treated as no evidence, still 201
+  assert.equal(res.statusCode, 201);
+  assert.ok(res.body.success);
 });
 
 test('createIncidentReport — Cloudinary upload failure cleans up and calls next', async () => {
