@@ -643,3 +643,146 @@ test('getMyIncidentReports — DB error calls next', async () => {
   assert.equal(next.calls.length, 1);
   assert.equal(next.calls[0].message, 'DB error');
 });
+
+/* ═══════════════════════════════════════════════════════════
+   updateIncidentStatus
+   ═══════════════════════════════════════════════════════════
+
+   The controller does:
+     const { INCIDENT_STATUSES } = require('../models/IncidentReport');
+   so the cached module must export that constant too.
+   ═══════════════════════════════════════════════════════════ */
+
+// Patch the model cache to also expose INCIDENT_STATUSES
+require.cache[modelPath].exports.INCIDENT_STATUSES = Object.freeze([
+  'SUBMITTED',
+  'UNDER_REVIEW',
+  'RESOLVED',
+]);
+
+// Chainable stub for findByIdAndUpdate(...).populate(...)
+function makeFindByIdUpdateQuery(result, shouldReject) {
+  return {
+    populate() {
+      if (shouldReject) return Promise.reject(shouldReject);
+      return Promise.resolve(result);
+    },
+  };
+}
+
+test('updateIncidentStatus — valid status returns 200 with updated report', async () => {
+  const updated = makeReport({ incidentStatus: 'UNDER_REVIEW' });
+  IncidentReport.findByIdAndUpdate = () => makeFindByIdUpdateQuery(updated);
+
+  const req = {
+    params: { id: REPORT_ID },
+    body: { incidentStatus: 'UNDER_REVIEW' },
+  };
+  const res = createResponse();
+  const next = createNext();
+
+  await controller.updateIncidentStatus(req, res, next);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.report.incidentStatus, 'UNDER_REVIEW');
+  assert.equal(next.calls.length, 0);
+});
+
+test('updateIncidentStatus — SUBMITTED status returns 200', async () => {
+  const updated = makeReport({ incidentStatus: 'SUBMITTED' });
+  IncidentReport.findByIdAndUpdate = () => makeFindByIdUpdateQuery(updated);
+
+  const req = {
+    params: { id: REPORT_ID },
+    body: { incidentStatus: 'SUBMITTED' },
+  };
+  const res = createResponse();
+  const next = createNext();
+
+  await controller.updateIncidentStatus(req, res, next);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.report.incidentStatus, 'SUBMITTED');
+});
+
+test('updateIncidentStatus — RESOLVED status returns 200', async () => {
+  const updated = makeReport({ incidentStatus: 'RESOLVED' });
+  IncidentReport.findByIdAndUpdate = () => makeFindByIdUpdateQuery(updated);
+
+  const req = {
+    params: { id: REPORT_ID },
+    body: { incidentStatus: 'RESOLVED' },
+  };
+  const res = createResponse();
+  const next = createNext();
+
+  await controller.updateIncidentStatus(req, res, next);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.report.incidentStatus, 'RESOLVED');
+});
+
+test('updateIncidentStatus — missing incidentStatus returns 400', async () => {
+  const req = {
+    params: { id: REPORT_ID },
+    body: {},
+  };
+  const res = createResponse();
+  const next = createNext();
+
+  await controller.updateIncidentStatus(req, res, next);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.success, false);
+  assert.ok(res.body.message.includes('incidentStatus must be one of'));
+});
+
+test('updateIncidentStatus — invalid status value returns 400', async () => {
+  const req = {
+    params: { id: REPORT_ID },
+    body: { incidentStatus: 'INVALID_VALUE' },
+  };
+  const res = createResponse();
+  const next = createNext();
+
+  await controller.updateIncidentStatus(req, res, next);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.success, false);
+});
+
+test('updateIncidentStatus — report not found returns 404', async () => {
+  IncidentReport.findByIdAndUpdate = () => makeFindByIdUpdateQuery(null);
+
+  const req = {
+    params: { id: REPORT_ID },
+    body: { incidentStatus: 'RESOLVED' },
+  };
+  const res = createResponse();
+  const next = createNext();
+
+  await controller.updateIncidentStatus(req, res, next);
+
+  assert.equal(res.statusCode, 404);
+  assert.equal(res.body.success, false);
+  assert.ok(res.body.message.includes('not found'));
+});
+
+test('updateIncidentStatus — DB error calls next', async () => {
+  const dbError = new Error('Connection lost');
+  IncidentReport.findByIdAndUpdate = () =>
+    makeFindByIdUpdateQuery(null, dbError);
+
+  const req = {
+    params: { id: REPORT_ID },
+    body: { incidentStatus: 'UNDER_REVIEW' },
+  };
+  const res = createResponse();
+  const next = createNext();
+
+  await controller.updateIncidentStatus(req, res, next);
+
+  assert.equal(next.calls.length, 1);
+  assert.equal(next.calls[0].message, 'Connection lost');
+});
