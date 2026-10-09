@@ -182,16 +182,8 @@ const incidentReportSchema = new mongoose.Schema(
   }
 );
 
-// Pre-validate: at least one evidence photo required
-incidentReportSchema.pre('validate', function (next) {
-  if (!this.evidence || this.evidence.length === 0) {
-    return next(
-      new Error('At least one evidence photo is required')
-    );
-  }
-
-  next();
-});
+// Evidence photos are optional — mobile rangers may submit without photos.
+// Photos are uploaded to Cloudinary when provided via the evidence field.
 
 // Compound indexes for common query patterns
 incidentReportSchema.index({ createdAt: -1 });
