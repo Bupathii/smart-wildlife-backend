@@ -6,10 +6,15 @@ const HighRiskZone = require('../src/models/HighRiskZone');
 const WildlifeRiskAlert = require('../src/models/WildlifeRiskAlert');
 const {
   acknowledgeAlert,
+  activateAnimalTracking,
   escalateAlert,
+  getAnimalTrackingSession,
+  getCollarTrackingSession,
   getRangerAlerts,
+  requestAnimalTracking,
   resolveAlert,
   submitAnimalLocation,
+  stopAnimalTracking,
   updateAlertResponse,
 } = require('../src/controllers/tracking.controller');
 const { defaultTrackingService } = require('../src/services/wildlifeAlertService');
@@ -17,6 +22,7 @@ const { createResponse, createNext } = require('./helpers');
 
 test('submitAnimalLocation generates an alert from an active saved risk zone', async () => {
   const originalAnimalFind = Animal.find;
+  const originalAnimalSessionFindOne = Animal.findOne;
   const originalAnimalUpdate = Animal.findOneAndUpdate;
   const originalZoneFind = HighRiskZone.find;
   const originalAlertFindOne = WildlifeRiskAlert.findOne;
@@ -32,6 +38,10 @@ test('submitAnimalLocation generates an alert from an active saved risk zone', a
     lean: async () => [
       { animalId: 'ELE001', name: 'Test Elephant', species: 'Elephant' },
     ],
+  });
+  Animal.findOne = () => ({
+    select() { return this; },
+    lean: async () => ({ trackingSession: { status: 'ACTIVE', requestedBy: 'manager-1' } }),
   });
   Animal.findOneAndUpdate = async (filter, update) => {
     savedLocation = { filter, update };
@@ -79,6 +89,71 @@ test('submitAnimalLocation generates an alert from an active saved risk zone', a
     assert.equal(next.calls.length, 0);
   } finally {
     Animal.find = originalAnimalFind;
+    Animal.findOne = originalAnimalSessionFindOne;
+    Animal.findOneAndUpdate = originalAnimalUpdate;
+    HighRiskZone.find = originalZoneFind;
+    WildlifeRiskAlert.findOne = originalAlertFindOne;
+    WildlifeRiskAlert.findOneAndUpdate = originalAlertUpsert;
+    defaultTrackingService.animalCatalog = originalAnimalCatalog;
+    defaultTrackingService.alertService.highRiskZones = originalZones;
+    defaultTrackingService.alertService.alerts = originalAlerts;
+    defaultTrackingService.alertService.defaultRanger = originalRanger;
+  }
+});
+
+test('submitAnimalLocation suppresses duplicate GPS alerts while the saved alert is active', async () => {
+  const originalAnimalFind = Animal.find;
+  const originalAnimalSessionFindOne = Animal.findOne;
+  const originalAnimalUpdate = Animal.findOneAndUpdate;
+  const originalZoneFind = HighRiskZone.find;
+  const originalAlertFindOne = WildlifeRiskAlert.findOne;
+  const originalAlertUpsert = WildlifeRiskAlert.findOneAndUpdate;
+  const originalAnimalCatalog = defaultTrackingService.animalCatalog;
+  const originalZones = defaultTrackingService.alertService.highRiskZones;
+  const originalAlerts = defaultTrackingService.alertService.alerts;
+  const originalRanger = defaultTrackingService.alertService.defaultRanger;
+
+  Animal.find = () => ({ lean: async () => [{ animalId: 'ELE001', name: 'Kandula', species: 'Elephant' }] });
+  Animal.findOne = () => ({
+    select() { return this; },
+    lean: async () => ({ trackingSession: { status: 'ACTIVE', requestedBy: 'ranger-1' } }),
+  });
+  Animal.findOneAndUpdate = async () => null;
+  HighRiskZone.find = () => ({
+    lean: async () => [{
+      zoneId: 'ZONE001',
+      name: 'Village Boundary',
+      latitude: 7.8731,
+      longitude: 80.7718,
+      radiusMeters: 500,
+      riskLevel: 'HIGH',
+    }],
+  });
+  WildlifeRiskAlert.findOne = () => ({
+    lean: async () => ({ alertId: 'ALERT-SAVED', priority: 'HIGH', assignedResponderId: 'ranger-1' }),
+  });
+  WildlifeRiskAlert.findOneAndUpdate = async () => {
+    throw new Error('An active saved alert must not be recreated');
+  };
+
+  try {
+    const res = createResponse();
+    await submitAnimalLocation({
+      body: {
+        animalId: 'ELE001',
+        latitude: 7.8731,
+        longitude: 80.7718,
+        timestamp: '2026-10-08T10:00:00Z',
+      },
+      user: { _id: 'ranger-1', role: 'RANGER', name: 'Ranger' },
+    }, res, createNext());
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.alertGenerated, false);
+    assert.equal(res.body.alertId, 'ALERT-SAVED');
+  } finally {
+    Animal.find = originalAnimalFind;
+    Animal.findOne = originalAnimalSessionFindOne;
     Animal.findOneAndUpdate = originalAnimalUpdate;
     HighRiskZone.find = originalZoneFind;
     WildlifeRiskAlert.findOne = originalAlertFindOne;
@@ -151,5 +226,64 @@ test('Ranger alert actions persist status and response notes', async () => {
     assert.equal(updates[3].values.responseNotes, 'Supervisor assistance requested');
   } finally {
     WildlifeRiskAlert.findOneAndUpdate = originalFindOneAndUpdate;
+  }
+});
+
+test('Ranger can request tracking, collar can activate it, and Ranger can stop it', async () => {
+  const originalFindOneAndUpdate = Animal.findOneAndUpdate;
+  const originalFindOne = Animal.findOne;
+  let trackingSession = { status: 'STOPPED' };
+
+  Animal.findOneAndUpdate = (filter, update) => ({
+    select() { return this; },
+    lean: async () => {
+      if (update.$set.trackingSession) {
+        trackingSession = update.$set.trackingSession;
+      } else {
+        Object.entries(update.$set).forEach(([path, value]) => {
+          const [, field] = path.split('.');
+          trackingSession[field] = value;
+        });
+      }
+      return { animalId: filter.animalId, trackingSession };
+    },
+  });
+  Animal.findOne = () => ({
+    sort() { return this; },
+    select() { return this; },
+    lean: async () => ({
+      animalId: 'ELE001',
+      name: 'Kandula',
+      species: 'Elephant',
+      trackingSession: { ...trackingSession, requestedBy: 'ranger-1' },
+    }),
+  });
+
+  try {
+    const ranger = { _id: 'ranger-1' };
+    const startResponse = createResponse();
+    await requestAnimalTracking({ params: { animalId: 'ele001' }, user: ranger }, startResponse, createNext());
+    assert.equal(startResponse.statusCode, 202);
+    assert.equal(startResponse.body.animal.trackingSession.status, 'REQUESTED');
+
+    const collarResponse = createResponse();
+    await getCollarTrackingSession({ user: ranger }, collarResponse, createNext());
+    assert.equal(collarResponse.body.session.animalId, 'ELE001');
+    assert.equal(collarResponse.body.session.status, 'REQUESTED');
+
+    const activateResponse = createResponse();
+    await activateAnimalTracking({ params: { animalId: 'ELE001' }, user: ranger }, activateResponse, createNext());
+    assert.equal(activateResponse.body.session.status, 'ACTIVE');
+
+    const sessionResponse = createResponse();
+    await getAnimalTrackingSession({ params: { animalId: 'ELE001' }, user: ranger }, sessionResponse, createNext());
+    assert.equal(sessionResponse.body.session.status, 'ACTIVE');
+
+    const stopResponse = createResponse();
+    await stopAnimalTracking({ params: { animalId: 'ELE001' }, user: ranger }, stopResponse, createNext());
+    assert.equal(stopResponse.body.session.status, 'STOPPED');
+  } finally {
+    Animal.findOneAndUpdate = originalFindOneAndUpdate;
+    Animal.findOne = originalFindOne;
   }
 });
