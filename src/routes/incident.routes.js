@@ -12,6 +12,7 @@ const upload = require('../middleware/upload.middleware');
 const {
   createIncidentReport,
   getMyIncidentReports,
+  getAllIncidentReports,
 } = require('../controllers/incident.controller');
 
 // All routes require a valid JWT
@@ -30,6 +31,13 @@ router.get(
   '/my',
   authorize('RANGER'),
   getMyIncidentReports
+);
+
+// GET /api/incidents — supervisory roles: view all reports with filters
+router.get(
+  '/',
+  authorize('ADMIN', 'PARK_MANAGER', 'RANGER_SUPERVISOR', 'RESEARCHER'),
+  getAllIncidentReports
 );
 
 module.exports = router;
