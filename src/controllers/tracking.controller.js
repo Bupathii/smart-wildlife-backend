@@ -77,11 +77,21 @@ async function submitAnimalLocation(req, res, next) {
       throw new Error(`Animal ${normalizedAnimalId} not found`);
     }
 
-    const matchedZone = trackingService.alertService.findMatchingZone(latitude, longitude);
+    const registeredAnimal = await Animal.findOne({ animalId: normalizedAnimalId })
+      .select('trackingSession')
+      .lean();
+    const sessionOwnerId = registeredAnimal?.trackingSession?.requestedBy?.toString?.();
+    const rangerId = req.user?._id?.toString?.();
     if (
-      matchedZone &&
-      !trackingService.alertService.getActiveAlertForAnimal(normalizedAnimalId, matchedZone.id)
+      registeredAnimal?.trackingSession?.status !== 'ACTIVE' ||
+      !sessionOwnerId ||
+      sessionOwnerId !== rangerId
     ) {
+      return res.status(409).json({ message: 'No active tracking session for this Ranger and animal' });
+    }
+
+    const matchedZone = trackingService.alertService.findMatchingZone(latitude, longitude);
+    if (matchedZone) {
       const savedActiveAlert = await WildlifeRiskAlertModel.findOne({
         animalId: normalizedAnimalId,
         zoneId: matchedZone.id,
@@ -103,6 +113,7 @@ async function submitAnimalLocation(req, res, next) {
       }
     }
 
+    trackingService.alertService.alerts = [];
     const result = await trackingService.processLocation({
       animalId: normalizedAnimalId,
       latitude,
@@ -278,6 +289,132 @@ async function escalateAlert(req, res, next) {
   }
 }
 
+async function requestAnimalTracking(req, res, next) {
+  try {
+    const animalId = String(req.params.animalId || '').trim().toUpperCase();
+    const animal = await Animal.findOneAndUpdate(
+      {
+        animalId,
+        status: 'ACTIVE',
+        'trackingSession.status': { $in: ['STOPPED', null] },
+      },
+      {
+        $set: {
+          trackingSession: {
+            status: 'REQUESTED',
+            requestedBy: req.user._id,
+            requestedAt: new Date(),
+            startedAt: null,
+            stoppedAt: null,
+          },
+        },
+      },
+      { new: true, runValidators: true }
+    ).select('animalId name trackingSession').lean();
+
+    if (!animal) {
+      return res.status(409).json({ message: 'Animal is inactive or already has a tracking session' });
+    }
+    return res.status(202).json({ success: true, animal });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function getCollarTrackingSession(req, res, next) {
+  try {
+    const animal = await Animal.findOne({
+      status: 'ACTIVE',
+      'trackingSession.requestedBy': req.user._id,
+      'trackingSession.status': { $in: ['REQUESTED', 'ACTIVE'] },
+    })
+      .sort({ 'trackingSession.requestedAt': 1 })
+      .select('animalId name species trackingSession')
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      session: animal ? {
+        animalId: animal.animalId,
+        name: animal.name,
+        species: animal.species,
+        status: animal.trackingSession.status,
+        requestedAt: animal.trackingSession.requestedAt,
+      } : null,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function getAnimalTrackingSession(req, res, next) {
+  try {
+    const animal = await Animal.findOne({
+      animalId: String(req.params.animalId || '').trim().toUpperCase(),
+      'trackingSession.requestedBy': req.user._id,
+    }).select('animalId trackingSession').lean();
+
+    if (!animal) {
+      return res.status(404).json({ message: 'Tracking session not found' });
+    }
+    return res.status(200).json({ success: true, session: animal.trackingSession });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function activateAnimalTracking(req, res, next) {
+  try {
+    const animal = await Animal.findOneAndUpdate(
+      {
+        animalId: String(req.params.animalId || '').trim().toUpperCase(),
+        'trackingSession.requestedBy': req.user._id,
+        'trackingSession.status': 'REQUESTED',
+      },
+      {
+        $set: {
+          'trackingSession.status': 'ACTIVE',
+          'trackingSession.startedAt': new Date(),
+        },
+      },
+      { new: true, runValidators: true }
+    ).select('animalId trackingSession').lean();
+
+    if (!animal) {
+      return res.status(409).json({ message: 'No pending tracking request for this animal' });
+    }
+    return res.status(200).json({ success: true, session: animal.trackingSession });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function stopAnimalTracking(req, res, next) {
+  try {
+    const animal = await Animal.findOneAndUpdate(
+      {
+        animalId: String(req.params.animalId || '').trim().toUpperCase(),
+        'trackingSession.requestedBy': req.user._id,
+        'trackingSession.status': { $in: ['REQUESTED', 'ACTIVE'] },
+      },
+      {
+        $set: {
+          'trackingSession.status': 'STOPPED',
+          'trackingSession.stoppedAt': new Date(),
+        },
+      },
+      { new: true, runValidators: true }
+    ).select('animalId trackingSession').lean();
+
+    if (!animal) {
+      return res.status(404).json({ message: 'Active tracking session not found' });
+    }
+    return res.status(200).json({ success: true, session: animal.trackingSession });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   submitAnimalLocation,
   getRangerAlerts,
@@ -286,4 +423,9 @@ module.exports = {
   updateAlertResponse,
   resolveAlert,
   escalateAlert,
+  requestAnimalTracking,
+  getCollarTrackingSession,
+  getAnimalTrackingSession,
+  activateAnimalTracking,
+  stopAnimalTracking,
 };

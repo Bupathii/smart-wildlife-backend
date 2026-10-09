@@ -37,6 +37,20 @@ const animalSchema = new mongoose.Schema(
       longitude: Number,
       lastUpdated: Date,
     },
+    trackingSession: {
+      status: {
+        type: String,
+        enum: ['STOPPED', 'REQUESTED', 'ACTIVE'],
+        default: 'STOPPED',
+      },
+      requestedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      requestedAt: Date,
+      startedAt: Date,
+      stoppedAt: Date,
+    },
     photo: {
       url: String,
       publicId: String,
